@@ -1,0 +1,10 @@
+appendix/
+streaming_proj/
+__pycache__/
+*.pyc
+.DS_Store
+*.pyo
+.Python
+.env
+venv/
+.venv/

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Letterboxd → Film Recommendations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Letterboxd brand palette */
+      --bg: #14181c;
+      --surface: #1c2228;
+      --border: #456;
+      --text: #abc;
+      --text-muted: #678;
+      --accent: #ff8000;
+      --accent-hover: #ff9933;
+      --accent-dim: #e67300;
+      --green: #00e054;
+      --cyan: #40bcf4;
+      --error: #c75c5c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "DM Sans", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 620px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+    }
+
+    h1 {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-weight: 600;
+      font-size: 2.25rem;
+      letter-spacing: 0.02em;
+      line-height: 1.2;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .instructions {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .instructions strong {
+      color: var(--text);
+    }
+
+    .instructions ol {
+      margin: 0.75rem 0 0 1.25rem;
+      padding: 0;
+    }
+
+    .instructions li {
+      margin-bottom: 0.35rem;
+    }
+
+    .instructions a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .instructions a:hover {
+      text-decoration: underline;
+    }
+
+    .form-group {
+      margin-bottom: 0.875rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: var(--text);
+    }
+
+    label .optional {
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+
+    input[type="file"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    input[type="file"]:hover {
+      border-color: var(--accent-dim);
+    }
+
+    input[type="file"]::file-selector-button {
+      background: var(--border);
+      border: none;
+      padding: 0.4rem 0.75rem;
+      margin-right: 1rem;
+      border-radius: 4px;
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .num-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    input[type="number"] {
+      width: 80px;
+      padding: 0.5rem 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 1rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.75rem;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      margin-top: 0.5rem;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-top-color: var(--bg);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #results {
+      margin-top: 1.5rem;
+      display: none;
+    }
+
+    #results.visible {
+      display: block;
+    }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .results-title {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .stats {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .rec-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .rec-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .rec-item:last-child {
+      border-bottom: none;
+    }
+
+    .rec-rank {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface);
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--accent);
+    }
+
+    .rec-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .rec-title {
+      font-weight: 500;
+      font-size: 1rem;
+    }
+
+    .rec-rating {
+      flex-shrink: 0;
+      font-size: 0.9rem;
+      color: var(--green);
+      font-weight: 600;
+    }
+
+    .error-box {
+      background: rgba(199, 92, 92, 0.12);
+      border: 1px solid var(--error);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-top: 1.5rem;
+      color: var(--error);
+      font-size: 0.9rem;
+    }
+
+    .error-box strong {
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Get Personalized Movie Recommendations!</h1>
+    <p class="subtitle">Stuck on what to watch next? Upload your Letterboxd data to get personalized film picks!</p>
+
+    <div class="instructions">
+      <strong>How to get your data</strong>
+      <ol>
+        <li>Go to <a href="https://letterboxd.com/settings/data" target="_blank" rel="noopener">letterboxd.com/settings/data</a></li>
+        <li>Click &quot;Request my data&quot; and wait for the email</li>
+        <li>Download and extract the ZIP file</li>
+        <li>Use <code>ratings.csv</code> and optionally <code>likes/films.csv</code></li>
+      </ol>
+    </div>
+
+    <form id="uploadForm">
+      <div class="form-group">
+        <label for="ratings">ratings.csv <span class="required">(required)</span></label>
+        <input type="file" id="ratings" name="ratings" accept=".csv" required>
+      </div>
+
+      <div class="form-group">
+        <label for="likes">likes/films.csv <span class="optional">(optional)</span></label>
+        <input type="file" id="likes" name="likes" accept=".csv">
+      </div>
+
+      <div class="form-group">
+        <label for="n_recommendations">Number of recommendations</label>
+        <div class="num-input-wrap">
+          <input type="number" id="n_recommendations" name="n_recommendations" value="10" min="5" max="50">
+          <span class="text-muted">(5–50)</span>
+        </div>
+      </div>
+
+      <button type="submit" class="btn" id="submitBtn">
+        Get recommendations
+      </button>
+    </form>
+
+    <div id="results">
+      <div class="results-header">
+        <h2 class="results-title">Your recommendations</h2>
+        <span class="stats" id="stats"></span>
+      </div>
+      <ol class="rec-list" id="recList"></ol>
+    </div>
+
+    <div id="errorBox" class="error-box" style="display:none;">
+      <strong>Error</strong>
+      <span id="errorMsg"></span>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById("uploadForm");
+    const submitBtn = document.getElementById("submitBtn");
+    const results = document.getElementById("results");
+    const recList = document.getElementById("recList");
+    const statsEl = document.getElementById("stats");
+    const errorBox = document.getElementById("errorBox");
+    const errorMsg = document.getElementById("errorMsg");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorBox.style.display = "none";
+      results.classList.remove("visible");
+
+      const ratings = document.getElementById("ratings").files[0];
+      const likes = document.getElementById("likes").files[0];
+      const n = document.getElementById("n_recommendations").value;
+
+      if (!ratings) {
+        showError("Please select ratings.csv");
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append("ratings", ratings);
+      fd.append("n_recommendations", n);
+      if (likes) fd.append("likes", likes);
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner"></span> Analyzing…';
+
+      try {
+        const res = await fetch("/recommend", {
+          method: "POST",
+          body: fd,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || "Something went wrong");
+          return;
+        }
+
+        renderResults(data);
+      } catch (err) {
+        showError(err.message || "Network error");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Get recommendations";
+      }
+    });
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorBox.style.display = "block";
+    }
+
+    function renderResults(data) {
+      const { recommendations, matched_count, unmatched_count, total_input } = data;
+
+      recList.innerHTML = recommendations.map((rec, i) => `
+        <li class="rec-item">
+          <span class="rec-rank">${i + 1}</span>
+          <div class="rec-content">
+            <span class="rec-title">${escapeHtml(rec.title)}</span>
+          </div>
+          <span class="rec-rating">${rec.predicted_rating.toFixed(1)}</span>
+        </li>
+      `).join("");
+
+      statsEl.textContent = `Matched ${matched_count} of ${total_input} films ${unmatched_count > 0 ? `(${unmatched_count} not in MovieLens)` : ""}`;
+      results.classList.add("visible");
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
