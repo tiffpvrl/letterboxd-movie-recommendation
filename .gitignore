@@ -8,3 +8,10 @@ __pycache__/
 .env
 venv/
 .venv/
+
+# MovieLens data (too large for git)
+ml-32m/
+ml-32m.zip
+
+# Cached SVD model
+svd_model.pkl

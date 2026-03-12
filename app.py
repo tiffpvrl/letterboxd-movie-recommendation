@@ -1,22 +1,40 @@
 """
-Flask web app for Letterboxd → Movie recommendations via collaborative filtering.
-Upload your Letterboxd ratings.csv and likes/films.csv to get personalized film recommendations.
+Flask web app for Letterboxd → Movie recommendations via SVD collaborative filtering.
+Upload your Letterboxd ratings.csv and likes/films.csv to get personalised film recs.
 """
 
-import os
 import tempfile
 from pathlib import Path
 
 from flask import Flask, render_template, request, jsonify
 
-# Project root
-BASE_DIR = Path(__file__).resolve().parent
-ML_RATINGS = BASE_DIR / "ml_data" / "ratings.csv"
-ML_MOVIES = BASE_DIR / "ml_data" / "movies.csv"
+from collab_filter import load_movielens_data, get_or_train_model
+from lb_recs import (
+    letterboxd_to_recommendations_pipeline,
+    build_movie_index,
+)
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max upload
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
 
+# ── Globals initialised once at startup ──────────────────────────────
+_model = None
+_movies_df = None
+_movie_index = None
+
+
+def _init():
+    """Load MovieLens data, movie index, and SVD model (cached after first train)."""
+    global _model, _movies_df, _movie_index
+    if _model is not None:
+        return
+
+    _, _movies_df = load_movielens_data()
+    _movie_index = build_movie_index(_movies_df)
+    _model = get_or_train_model()
+
+
+# ── Routes ───────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -25,24 +43,20 @@ def index():
 
 @app.route("/recommend", methods=["POST"])
 def recommend():
-    """Process uploaded Letterboxd CSVs and return film recommendations."""
-    if "ratings" not in request.files:
+    """Accept uploaded Letterboxd CSVs and return recommendations."""
+    if "ratings" not in request.files or request.files["ratings"].filename == "":
         return jsonify({"error": "ratings.csv is required"}), 400
 
     ratings_file = request.files["ratings"]
-    if ratings_file.filename == "":
-        return jsonify({"error": "ratings.csv is required"}), 400
-
     if not ratings_file.filename.lower().endswith(".csv"):
         return jsonify({"error": "ratings must be a CSV file"}), 400
 
-    # Optional likes file
     liked_file = request.files.get("likes")
     if liked_file and liked_file.filename == "":
         liked_file = None
 
-    n_recommendations = request.form.get("n_recommendations", "10", type=int)
-    n_recommendations = max(5, min(50, n_recommendations))
+    n_recs = request.form.get("n_recommendations", 10, type=int)
+    n_recs = max(5, min(50, n_recs))
 
     with tempfile.TemporaryDirectory() as tmpdir:
         ratings_path = Path(tmpdir) / "ratings.csv"
@@ -54,15 +68,11 @@ def recommend():
             liked_file.save(liked_path)
 
         try:
-            from lb_recs import letterboxd_to_recommendations_pipeline
-            from collab_filter import ItemBasedCF, create_user_item_matrix
-
             results = letterboxd_to_recommendations_pipeline(
                 letterboxd_ratings_path=str(ratings_path),
-                movielens_ratings_path=str(ML_RATINGS),
-                movielens_movies_path=str(ML_MOVIES),
                 letterboxd_liked_path=str(liked_path) if liked_path else None,
-                n_recommendations=n_recommendations,
+                movies_df=_movies_df,
+                movie_index=_movie_index,
             )
 
             if results is None:
@@ -71,18 +81,14 @@ def recommend():
                     "Make sure your ratings.csv has columns: Date, Name, Year, Letterboxd URI, Rating"
                 }), 400
 
-            user_item = create_user_item_matrix(results["combined_ratings"])
-            model = ItemBasedCF(user_item)
-            model.compute_similarity()
-
-            recommendations = model.recommend(
-                results["your_user_id"],
-                n_recommendations=n_recommendations,
-                movies_df=results["movies_df"],
+            recommendations = _model.recommend(
+                results["matched_ratings"],
+                n_recommendations=n_recs,
+                movies_df=_movies_df,
             )
 
             recs = [
-                {"movie_id": int(mid), "title": title, "predicted_rating": round(float(r), 2)}
+                {"movie_id": int(mid), "title": title, "predicted_rating": round(r, 2)}
                 for mid, title, r in recommendations
             ]
 
@@ -101,8 +107,7 @@ def recommend():
 
 
 if __name__ == "__main__":
-    if not ML_RATINGS.exists() or not ML_MOVIES.exists():
-        print("ERROR: ml_data/ratings.csv and ml_data/movies.csv must exist.")
-        print("Download from https://grouplens.org/datasets/movielens/")
-        exit(1)
-    app.run(debug=True, port=5000)
+    print("Initialising model (first run trains SVD — may take a few minutes) …")
+    _init()
+    print("Ready.\n")
+    app.run(debug=False, port=5000)
